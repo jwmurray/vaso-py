@@ -11,6 +11,8 @@ from logging import debug
 from logging.config import dictConfig
 from os import makedirs, path, listdir
 from utils import get_config
+import pathlib
+from datetime import date
 
 import numpy
 from PIL import Image
@@ -18,6 +20,20 @@ from PIL import Image
 default_input_path = r'C:\Users\jmurray\vaso\imt_studies\02-11-20 Wright\CUPRAK, THERESA, 06 08 63F__WRIGHT__[0000082510172102370006842]'
 default_input_path = r'C:\Users\jmurray\vaso\imt_studies'
 default_output_path = r'C:\Users\jmurray\vaso\anon_studies'
+
+def convert_func(matchobj):
+    this_year = date.today().year
+    m =  matchobj.group(1)
+    try:
+        year = int(m)
+    except:
+        year = this_year
+    
+    diff =  this_year - year
+    if diff > 89:
+        return 90
+    else:
+        return year
 
 class Anon:
     def __init__(self):
@@ -32,9 +48,14 @@ class Anon:
         # hashed_name = binascii.b2a_base64(struct.pack('i', hash(name)))
         return hashed_name
 
-    def get_new_patient_id(self):
+    def incr_new_patient_id(self):
         self.patient_id += 1
+
+    def get_new_patient_id(self):
         return self.patient_id
+
+    def get_new_patient_name(self):
+        return "patient-" + str(self.patient_id)
 
     # Create anonymous .bmp file from .bmp file
     def anonymize_file(self, input_file_path, output_file_path):
@@ -49,10 +70,42 @@ class Anon:
         try:
             output_image.save(output_file_path)
         except:
-            dir = path.dirname(output_file_path)
-            if not path.exists(dir):
+            dir = os.path.dirname(output_file_path)
+            if not os.path.exists(dir):
                 makedirs(dir)
                 output_image.save(output_file_path)
+    
+
+
+
+    def anonymize_text_file(self, input_file_path, output_file_path, 
+            orig_patient_name, anon_patient_name):
+        
+        print(f"anonymize txt file: {input_file_path}, output_file_path: {output_file_path}, orig_patient_name: {orig_patient_name}, anon_patient_name: {anon_patient_name}")
+
+
+        input_files = [f for f in os.listdir(input_file_path) if f[-4:] == ".txt"]
+        for file in input_files:
+            path = pathlib.Path(output_file_path)
+            path.mkdir(parents = True, exist_ok=True)
+            out_file = re.sub(f'{orig_patient_name}', anon_patient_name, file, flags=re.IGNORECASE)
+            output_file_fullpath = os.path.join(output_file_path, out_file)
+            output = open(output_file_fullpath, "w")
+            input = open(os.path.join(input_file_path, file))
+
+            for line in input:
+                lineout = re.sub(f'^Name: ' + orig_patient_name + r'$', f'Name: {anon_patient_name}', line, flags=re.IGNORECASE)
+                ## change dates to years
+                lineout = re.sub(r'\d{2}\-\d{2}\-(\d{4})$', r'\1', lineout, count=100)
+                line = "7 ate 9"
+                new_line =  re.sub(r'\d{2}\-\d{2}\-(\d{4})$', convert_func, line)
+
+                lineout = re.sub(r'^(Patient ID:\s)([a-z]+).*$', r'\1 ' + str(anon.get_new_patient_id()), lineout, flags=re.IGNORECASE,  )
+                output.write(lineout)
+                # r'$'(.{4})-(.{3})-(.{3})-(.{2})$', r'\1-\4-\2-\3', line))
+
+            input.close()
+            output.close()
 
 
     # Input and output paths must be directories
@@ -62,16 +115,11 @@ class Anon:
         path_list = os.listdir(input_path)
 
         for dirname, dirnames, filenames in os.walk(input_path):
-            # follow path to all subdirectories first.
-            # for subdirname in dirnames:
-            #     print(os.path.join(dirname, subdirname))
-
-            # then follow path to all filenames.
             for index, filename in enumerate([f for f in filenames if (not ".DS_Store" in f) and (not ".db" in f) and (not "sonologo.gif" in f)]):
                 # print(filename)
                 subpath = get_subpath(input_path, dirname)
                 # print(f"subpath: {subpath}")
-                subpath = path.join(output_path, subpath )
+                subpath = os.path.join(output_path, subpath )
                 m = re.search(r'(20[0-2]{2})[a-zA-Z]{3}\d{2}\sStudy__\[.*\]', dirname)
                 if m:
                     study_year = m.group(1)
@@ -79,10 +127,8 @@ class Anon:
                     study_year = ''
                 subpath = re.sub('20[1-2]\d[a-zA-Z]{3}\d+\s*Study__\[\d+\]', repl='mixed', string=subpath)
                 updated_filename = re.sub(pattern = '^.*.bmp', repl= str(study_year) + 'image.' + str(index) + ".bmp", string=filename)
-                full_filename = path.join(os.path.join(output_path, subpath), updated_filename)
-                # print(full_filename)
+                full_filename = os.path.join(os.path.join(output_path, subpath), updated_filename)
                 self.anonymize_file(os.path.join(dirname, filename), full_filename)
-                # print(os.path.join(dirname, filename))
 
     # Input and output paths must be directories
     def anonymize_path(self, input_path, output_path):
@@ -91,16 +137,22 @@ class Anon:
 
         for clinic in [f for f in listdir(input_path) if (not ".DS_Store" in f) and (not ".db" in f) and (not "sonologo.gif" in f)]:
             print(f'clinic: {clinic}')
-            clinic_path = path.join(input_path, clinic)
+            clinic_path = os.path.join(input_path, clinic)
             patient_list = os.listdir(clinic_path)
-            for patient in [p for p in patient_list if (not ".DS_Store" in p) and (not ".db" in p) and (not "sonologo.gif" in p)]:
-                anon.anonymize_patient(path.join(clinic_path, patient), path.join(args.outpath,  "patient-" + str(anon.get_new_patient_id())))
-
-            # # then follow path to all filenames.
-            # for filename in filenames:
-            #     anonymize_file(os.path.join(dirname, filename), os.path.join(output_path, filename))
-            #     # print(os.path.join(dirname, filename))
-
+            for patient in [p for p in patient_list if (not ".DS_Store" in p) and (not ".db" in p) and (not "sonologo.gif" in p) and (not "zz" in p)]:
+                patient_match = re.search(r'(.*?), \d', patient)
+                if(patient_match):
+                    patient_name = patient_match.group(1)
+                else:
+                    raise Exception("Could not find patient in path.")
+                self.incr_new_patient_id()
+                anon_patient_name = "patient-" + str(self.get_new_patient_id())
+                self.anonymize_patient(os.path.join(clinic_path, patient), 
+                    os.path.join(output_path,  anon_patient_name))
+                self.anonymize_text_file(input_file_path = os.path.join(clinic_path, patient), 
+                    output_file_path= os.path.join(output_path, anon_patient_name),
+                    anon_patient_name= anon_patient_name, orig_patient_name=patient_name)
+                
 def get_subpath(base_path, current_path):
     index = current_path.find(base_path)
     subpath = ""
@@ -175,12 +227,14 @@ if __name__ == '__main__':
         elif path.isfile(args.inpath):
             outpath = args.outpath
             if path.isdir(outpath):
-                outpath = path.join(outpath, "newfile.bmp")
+                outpath = os.path.join(outpath, "newfile.bmp")
             anonymize_file(args.inpath, outpath)
         
         ### Process an input directory to an output directory only
-        elif path.isdir(args.inpath) and path.isdir(args.outpath):
-            anon.anonymize_path(args.inpath, path.join(args.outpath, "patient" + str(anon.get_new_patient_id())))
+        elif path.isdir(args.inpath) :
+            path = pathlib.Path(args.outpath)
+            path.mkdir(parents = True, exist_ok=True)
+            anon.anonymize_path(args.inpath, args.outpath)
 
         else:
             raise ValueError('unsupported path arguments: inpath: {}, outpath: {}'.format(args.inpath, args.outpath))

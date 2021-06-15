@@ -6,7 +6,7 @@ import os
 from posixpath import basename
 import re
 
-files = glob("c:\\Users\\jmurray\\vaso\\imt_studies\\**\*.txt", recursive=True)
+files = glob("c:\\Users\\jmurray\\vaso\\imt_studies\\**\\zz**\*.txt", recursive=True)
 for name in files:
     lowername = name.lower()
     dirpath = os.path.dirname(name)
@@ -17,9 +17,12 @@ for name in files:
     print(f"old name: {old_name}")
     name_lower = name.lower()
 
-    analyst_match = re.search(" (kalli|lindy|janice|kristin)", name_lower)
+    analyst_match = re.search(" ?(kalli|lindy|jan|janice|kristin)", name_lower)
     if analyst_match:
-        analyst = analyst_match.group(1)
+        if analyst_match.group(1) == "jan":
+            analyst = "janice"
+        else:
+            analyst = analyst_match.group(1)
     else:
         raise Exception("Analyst unknown")
 
@@ -45,6 +48,11 @@ for name in files:
     
     new_name =  os.path.join(patient_path, "{}".format("{}-{}".format(analyst, basename)))
     print("new name: ", new_name)
+
+    v_new_name = re.search(r'c:\\Users\\(.*)', new_name)
+    print(v_new_name.group(1))
+    v_new_name_path = os.path.join(r"v:\\", v_new_name.group(1))
     shutil.copy(old_name, new_name)
+    shutil.copy(old_name, v_new_name_path)
     
     
