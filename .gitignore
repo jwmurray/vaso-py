@@ -1,4 +1,5 @@
 *.log
 *.bmp
 *.jpg
+__pycache__
 .vscode

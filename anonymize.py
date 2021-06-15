@@ -10,6 +10,7 @@ import uuid
 from logging import debug
 from logging.config import dictConfig
 from os import makedirs, path, listdir
+from utils import get_config
 
 import numpy
 from PIL import Image
@@ -158,6 +159,8 @@ if __name__ == '__main__':
             'handlers': ['file']
         }
     })
+
+    foo = get_config("anonymize.ini")
 
     anon = Anon()
     # pseudonym = anon.pseudonym("foozeball")
