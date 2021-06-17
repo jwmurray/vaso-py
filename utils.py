@@ -5,7 +5,7 @@ from configparser import ConfigParser
 def get_config(cfgfile):
     config = ConfigParser()
     config.read(cfgfile)
-    clinics = config["clinics"]["clinics"]
+    input_path = config["input"]["path"]
     
     # # if hostname not in config: raise KeyError('no host configuration for "{}"'.format(hostname))
     # conf = { **config.defaults(),
