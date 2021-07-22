@@ -47,6 +47,23 @@ def storageattach(vm_name, controller_type, disk_path):
     except Exception:
         return None
 
+def vm_modify(vm_name, action):
+    if 'bridged' == action:
+        cmd = f'VBoxManage modifyvm {vm_name} --nic1 bridged --bridgeadapter1 enp4s0'
+        output = execute(cmd)
+        return output
+
+def vm_stop(vm_name):
+    cmd = f'VBoxManage controlvm {vm_name} acpipowerbutton'
+    output = execute(cmd)
+    return output
+
+def vm_start(vm_name):
+    cmd = f'VBoxManage startvm {vm_name} --type headless'
+    output = execute(cmd)
+    return output
+
+
 def vm_create(vm_name, ostype, vb_folder, disk_size_mb):
     vms_folder = os.path.join(vb_folder, 'vms')
     disks_folder = os.path.join(vb_folder, 'vdisks')
@@ -62,7 +79,7 @@ def vm_create(vm_name, ostype, vb_folder, disk_size_mb):
     output = execute(cmd)
     cmd = f'VBoxManage modifyvm {vm_name} --memory 8192 --vram 128'
     output = execute(cmd)
-    cmd = f'VBoxManage modifyvm {vm_name} --nic1 nat'
+    cmd = f'VBoxManage modifyvm {vm_name} --nic1 bridged --bridgeadapter1 enp4s0'
     output = execute(cmd)
 
     disk_create_output = disk_create(disk_path, disk_size_mb)
@@ -165,11 +182,42 @@ def disk_create(disk_path, size):
 
 
 
-def vm_list():
-    cmd = f'vboxmanage list vms'
-    byte_output = subprocess.check_output(cmd.split())
-    output= byte_output.decode('UTF-8')
-    return output
+def vm_list(name=None):
+    
+    if None == name:
+        cmd_all = f'vboxmanage list vms'
+        cmd_running = f'vboxmanage list runningvms'
+        output_all = execute(cmd_all)
+        output_running = execute(cmd_running)
+        vms_all = output_all.split('\n')
+        vms_running = output_running.split('\n')
+        dict = {}
+        pattern = r'^\"(.*?)\".+\{(.*?)\}'
+
+        vms = {}
+        for vm in vms_all:
+            vm_dict = {}
+            match = re.match(pattern, vm)
+            if match:
+                name = match.groups()[0]
+                id = match.groups()[1]
+                vm_dict['id'] = id
+                vm_dict['status'] = 'stopped'
+                vms[name] = vm_dict
+        
+        for vm in vms_running:
+            vm_dict = {}
+            match = re.match(pattern, vm)
+            if match:
+                name = match.groups()[0]
+                id = match.groups()[1]
+                vms[name]['status'] = 'running'
+        
+        return vms
+    else:
+        output = vm_vminfo(name)
+        return output
+
 
 def vb_disk_delete(disk_uuid):
     cmd = f'vboxmanage closemedium disk {disk_uuid} --delete'
@@ -245,22 +293,53 @@ def disk_dictionary():
 
 def main():
     parser = argparse.ArgumentParser(description="Create VirtualBox VM")
-    parser.add_argument('--name','-n', default=vm_name)
+    parser.add_argument('--name','-n', default=None)
     parser.add_argument('--ostype', default='Ubuntu_64')
     parser.add_argument('--vb_folder', default='/data/jmurray/virtualboxvms')
     parser.add_argument('--size', default=vm_size, help="size of disk in MB")
+    parser.add_argument('--mod', default='bridged', help="how to modify vm")
+
+
     parser.add_argument('--vm_storagefolder', default='/data/jmurray/virtualboxvms/vmdisks')
     # parser.add_argument('--doctors', default=False, action="store_true", help='dump doctors')
-    parser.add_argument('action', choices=['create', 'list', 'delete'], help='perform the specified action')
+    parser.add_argument('action', choices=['create', 'list', 'delete', 'start', 'stop', 'modify'], help='perform the specified action')
 
-    args = parser.parse_args(['list'])
-    # args = parser.parse_args(['--patients'])
+    args = parser.parse_args()
+    # args = parser.parse_args(['list'])
+    # args = parser.parse_args(['list', '--name', 'cem_vm'])
+    # args = parser.parse_args(['modify', '--name', 'cem_vm'])
+    # args = parser.parse_args(['stop', '--name', 'cem_vm'])
+    # args = parser.parse_args(['start', '--name', 'cem_vm'])
 
     print(args)
+    print()
 
-    print(attached_disks_UUIDs(args.name))
-    vm_delete(args.name, delete_disk=True)
-    vm_create(args.name, args.ostype, args.vb_folder, args.size)
+    if 'list' == args.action:
+        if args.name:
+            output = vm_list(args.name)
+        else:
+            output = vm_list()
+        pprint.pprint(output)
+
+    elif 'modify' == args.action:
+        output = vm_modify(args.name, args.mod)
+        print(output)
+    
+    elif 'delete' == args.action:
+        vm_delete(args.name, delete_disk=True)
+
+    elif 'create' == args.action:
+        vm_create(args.name, args.ostype, args.vb_folder, args.size)
+
+    elif 'stop' == args.action:
+        vm_stop(args.name)
+
+    elif 'start' == args.action:
+        vm_start(args.name)
+
+    else:
+        # print(attached_disks_UUIDs(args.name))
+        pprint.pprint(vm_list())
 
     # disk_create(vm_name, vm_size)
     # pprint.pprint(disk_dictionary())
